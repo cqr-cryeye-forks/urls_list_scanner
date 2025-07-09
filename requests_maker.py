@@ -31,26 +31,37 @@ def format_bytes(num_bytes: int) -> str:
         return f"{num_bytes} B"
 
 def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name) -> None:
-    cleaned_results = []
+    final_results = []
 
     for result in results:
-        if result.get("error"):
-            cleaned_results.append({
-                "url": result.get("url"),
-                "status_code": str(result.get("status_code")),
-                "error": result.get("error")
-            })
-        else:
-            cleaned_results.append({
-                "url": result.get("url"),
-                "status_code": str(result.get("status_code")),
-                "content_length": format_bytes(result.get('content_length')),
-                "stream_reader": format_bytes(result.get('stream_reader')),
-                "body_length": format_bytes(result.get('body_length')),
-            })
+        url = result.get("url")
+        if not url:
+            continue
 
+        if result.get("error"):
+            base_entry = {
+                "url": url,
+                "status_code": result.get("status_code"),
+                "error": result.get("error")
+            }
+        else:
+            base_entry = {
+                "url": url,
+                "status_code": str(result.get("status_code")),
+                "content_length": format_bytes(result.get("content_length")),
+                "stream_reader": format_bytes(result.get("stream_reader")),
+                "body_length": format_bytes(result.get("body_length")),
+            }
+
+        # создаём дублирующую структуру с url как ключом
+        url_keyed_entry = {
+            url: {k: v for k, v in base_entry.items() if k != "url"}
+        }
+
+        final_results.append(base_entry)
+        final_results.append(url_keyed_entry)
     with open(result_file_name, 'w') as jf:
-        json.dump(cleaned_results, jf, indent=2)
+        json.dump(final_results, jf, indent=2)
 
     logging.log(logging.DEBUG, f'Wrote results to file with name: {result_file_name}')
 
