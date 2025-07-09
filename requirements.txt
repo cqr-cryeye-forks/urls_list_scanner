@@ -1,3 +1,2 @@
-asyncio
-aiohttp
-yarl
+aiohttp>=3.12.13
+yarl>=1.20.1
