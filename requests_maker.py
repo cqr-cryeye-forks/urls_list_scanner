@@ -8,26 +8,54 @@ import asyncio
 import argparse
 
 from time import time
-from typing import List, NamedTuple
+from typing import NamedTuple
 
 from utils.logger_formatter import OneLineExceptionFormatter
 from utils.request_manager import RequestManager
-from utils.contants import DEFAULT_DEBUGGING, RESULT_FILE_NAME, ASYNCIO_GATHER_TYPE, TIMEOUT
+from utils.contants import DEFAULT_DEBUGGING, ASYNCIO_GATHER_TYPE, TIMEOUT, MAIN_DIR
 
 
 class RunConfig(NamedTuple):
     path_to_urls: pathlib.Path
+    output: str
     verbose: bool = DEFAULT_DEBUGGING
-    output: str = RESULT_FILE_NAME
+
+def format_bytes(num_bytes: int) -> str:
+    if num_bytes is None:
+        return "0 B"
+    if num_bytes >= 1024 * 1024:
+        return f"{num_bytes / (1024 * 1024):.2f} MB"
+    elif num_bytes >= 1024:
+        return f"{num_bytes / 1024:.2f} KB"
+    else:
+        return f"{num_bytes} B"
+
+def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name) -> None:
+    cleaned_results = []
+
+    for result in results:
+        if result.get("error"):
+            cleaned_results.append({
+                "url": result.get("url"),
+                "status_code": str(result.get("status_code")),
+                "error": result.get("error")
+            })
+        else:
+            cleaned_results.append({
+                "url": result.get("url"),
+                "status_code": str(result.get("status_code")),
+                "content_length": format_bytes(result.get('content_length')),
+                "stream_reader": format_bytes(result.get('stream_reader')),
+                "body_length": format_bytes(result.get('body_length')),
+            })
+
+    with open(result_file_name, 'w') as jf:
+        json.dump(cleaned_results, jf, indent=2)
+
+    logging.log(logging.DEBUG, f'Wrote results to file with name: {result_file_name}')
 
 
-def write_results_to_file(results: ASYNCIO_GATHER_TYPE) -> None:
-    with open(RESULT_FILE_NAME, 'w') as file:
-        file.write(json.dumps(results))
-    logging.log(logging.DEBUG, f'Wrote results to file with name: {RESULT_FILE_NAME}')
-
-
-def define_config_from_cmd(parsed_args: 'argparse.Namespace') -> RunConfig:
+def define_config_from_cmd(parsed_args: argparse.Namespace) -> RunConfig:
     """
     parsing config from args
     :param parsed_args: argparse.Namespace
@@ -51,9 +79,14 @@ def cli() -> argparse.Namespace:
         '--input', type=pathlib.Path, metavar='PATH', dest='path_to_urls',
         help='Path to file with input. Example: "/wd/input.txt"',
     )
-    parser.add_argument('-v', '--verbose', action='store_true', default=DEFAULT_DEBUGGING,
+    parser.add_argument(
+        '--target', type=str, required=False,
+        help='Single target URL to scan instead of file input',
+    )
+
+    parser.add_argument('--verbose', action='store_true', default=DEFAULT_DEBUGGING,
                         required=False, help='Verbose debug messages')
-    parser.add_argument('-o', '--output', type=str, default=RESULT_FILE_NAME, required=False, help='Output file name')
+    parser.add_argument('--output', type=str, required=False, help='Output file name')
 
     return parser.parse_args()
 
@@ -65,18 +98,26 @@ async def main() -> None:
     OneLineExceptionFormatter.logger_initialisation(config.verbose)
     logging.log(logging.DEBUG, 'Main Started')
 
-    urls: List[str] = config.path_to_urls.read_text().splitlines()
+    output: str = args.output
+    target: str = args.target
+
+    if target:
+        urls: list[str] = [target]
+    elif config.path_to_urls and config.path_to_urls.exists():
+        urls: list[str] = config.path_to_urls.read_text().splitlines()
+    else:
+        raise ValueError("You must specify either --target or --input with a valid file path")
+
     logging.log(logging.DEBUG, f'Got {len(urls)} from file with name: {args.path_to_urls}')
 
     results: ASYNCIO_GATHER_TYPE = await RequestManager.create_make_requests(urls=urls, timeout=TIMEOUT)
 
-    write_results_to_file(results)
+    RESULT_FILE_NAME: pathlib.Path = MAIN_DIR / output
+
+    write_results_to_file(results, RESULT_FILE_NAME)
 
 
 if __name__ == '__main__':
-    try:
-        start_time = time()
-        asyncio.run(main(), debug=DEFAULT_DEBUGGING)
-        logging.log(logging.DEBUG, f'Time consumption: {time() - start_time: 0.3f}s')
-    except Exception as error:
-        logging.exception(f'Failed with: {error}')
+    start_time = time()
+    asyncio.run(main(), debug=DEFAULT_DEBUGGING)
+    logging.log(logging.DEBUG, f'Time consumption: {time() - start_time: 0.3f}s')

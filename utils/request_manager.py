@@ -1,29 +1,43 @@
 import asyncio
 import logging
-
-from yarl import URL
-from typing import Union, Dict, List
-
 from asyncio import BoundedSemaphore
 from asyncio.exceptions import TimeoutError
+from typing import Union, Any
 
-from aiohttp import ClientSession, ClientTimeout, InvalidURL, \
-    ClientConnectorError, ClientResponseError, ServerTimeoutError, TCPConnector
+from aiohttp import (
+    ClientSession,
+    ClientTimeout,
+    InvalidURL,
+    ClientConnectorError,
+    ClientResponseError,
+    ServerTimeoutError,
+    TCPConnector,
+)
+from yarl import URL
 
-from utils.contants import TIMEOUT_DEFAULT, SIMULTANEOUS_CONCURRENT_TASKS, USER_AGENT, LIMIT_OF_ATTEMPTS_TO_RETRY, \
-    CONTENT_LENGTH_DEFAULT, REQUESTS_RETRIES_NUM_TO_REMOVE, STATUS_CODE_DEFAULT, ASYNCIO_GATHER_TYPE, \
-    STREAM_READER_DEFAULT, BODY_LENGTH_DEFAULT
+from utils.contants import (
+    TIMEOUT_DEFAULT,
+    SIMULTANEOUS_CONCURRENT_TASKS,
+    USER_AGENT,
+    LIMIT_OF_ATTEMPTS_TO_RETRY,
+    CONTENT_LENGTH_DEFAULT,
+    REQUESTS_RETRIES_NUM_TO_REMOVE,
+    STATUS_CODE_DEFAULT,
+    ASYNCIO_GATHER_TYPE,
+    STREAM_READER_DEFAULT,
+    BODY_LENGTH_DEFAULT,
+)
 
 
 class RequestManager:
-    _urls: List[URL]
+    _urls: list[URL]
     _timeout: ClientTimeout
     _session: ClientSession
     _semaphore: BoundedSemaphore
-    _headers: Dict[str, str]
+    _headers: dict[str, str]
     _failed_requests_num: int
 
-    def __init__(self, urls: List[str], timeout: int = TIMEOUT_DEFAULT):
+    def __init__(self, urls: list[str], timeout: int = TIMEOUT_DEFAULT):
         self._urls = [URL(url) for url in urls]
         self._timeout = ClientTimeout(total=timeout)
         self._session = ClientSession(timeout=self.timeout, connector=TCPConnector(ssl=False))
@@ -32,17 +46,17 @@ class RequestManager:
         self._failed_requests_num = 0
 
     @classmethod
-    async def create_make_requests(cls, urls: List[str], timeout: int = TIMEOUT_DEFAULT) -> ASYNCIO_GATHER_TYPE:
+    async def create_make_requests(cls, urls: list[str], timeout: int = TIMEOUT_DEFAULT) -> ASYNCIO_GATHER_TYPE:
         obj: RequestManager = cls(urls=urls, timeout=timeout)
         logging.log(logging.DEBUG, f'{obj.__class__} created')
         results = await obj.make_requests()
         logging.log(logging.DEBUG, f'Number failed results: {obj.failed_requests_num}')
         return results
 
-    async def _fetch(self, url: URL, session: ClientSession) -> Dict[str, Union[str, int]]:
+    async def _fetch(self, url: URL, session: ClientSession) -> dict[str, Union[str, int]]:
         logging.log(logging.DEBUG, f'Request to url: "{url}" stated')
         async with self.semaphore:
-            result: Dict[str, str] = {'url': str(url)}
+            result: dict[str, str] = {'url': str(url)}
             left_of_attempts_to_retry: int = LIMIT_OF_ATTEMPTS_TO_RETRY
             while left_of_attempts_to_retry:
                 try:
@@ -80,7 +94,7 @@ class RequestManager:
                     break
             return result
 
-    async def make_requests(self) -> ASYNCIO_GATHER_TYPE:
+    async def make_requests(self) -> list[Any]:
         async with self.session as session:
             return await asyncio.gather(*[
                 asyncio.create_task(
@@ -89,7 +103,7 @@ class RequestManager:
             ])
 
     @property
-    def urls(self) -> List[URL]:
+    def urls(self) -> list[URL]:
         return self._urls
 
     @property
@@ -105,7 +119,7 @@ class RequestManager:
         return self._semaphore
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         return self._headers
 
     @property
