@@ -1,24 +1,23 @@
 #!/usr/bin/env python
 
-import json
-import pathlib
-import logging
-
-import asyncio
 import argparse
-
+import asyncio
+import json
+import logging
+import pathlib
 from time import time
 from typing import NamedTuple
 
+from utils.contants import DEFAULT_DEBUGGING, ASYNCIO_GATHER_TYPE, TIMEOUT, MAIN_DIR
 from utils.logger_formatter import OneLineExceptionFormatter
 from utils.request_manager import RequestManager
-from utils.contants import DEFAULT_DEBUGGING, ASYNCIO_GATHER_TYPE, TIMEOUT, MAIN_DIR
 
 
 class RunConfig(NamedTuple):
     path_to_urls: pathlib.Path
     output: str
     verbose: bool = DEFAULT_DEBUGGING
+
 
 def format_bytes(num_bytes: int) -> str:
     if num_bytes is None:
@@ -30,9 +29,11 @@ def format_bytes(num_bytes: int) -> str:
     else:
         return f"{num_bytes} B"
 
-def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name) -> None:
-    final_results = []
 
+def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name, format_json:bool = False) -> None:
+    final_results = {
+        "error": "Empty"
+    }
     for result in results:
         url = result.get("url")
         if not url:
@@ -52,14 +53,13 @@ def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name) -> Non
                 "stream_reader": format_bytes(result.get("stream_reader")),
                 "body_length": format_bytes(result.get("body_length")),
             }
+        if format_json:
+            final_results = {
+                url: {k: v for k, v in base_entry.items()}
+            }
+        else:
+            final_results = base_entry
 
-        # создаём дублирующую структуру с url как ключом
-        url_keyed_entry = {
-            url: {k: v for k, v in base_entry.items() if k != "url"}
-        }
-
-        final_results.append(base_entry)
-        final_results.append(url_keyed_entry)
     with open(result_file_name, 'w') as jf:
         json.dump(final_results, jf, indent=2)
 
@@ -98,6 +98,7 @@ def cli() -> argparse.Namespace:
     parser.add_argument('--verbose', action='store_true', default=DEFAULT_DEBUGGING,
                         required=False, help='Verbose debug messages')
     parser.add_argument('--output', type=str, required=False, help='Output file name')
+    parser.add_argument('--format_json', action='store_true', required=False, help='result format json')
 
     return parser.parse_args()
 
@@ -111,6 +112,7 @@ async def main() -> None:
 
     output: str = args.output
     target: str = args.target
+    format_json: bool = args.format_json
 
     if target:
         urls: list[str] = [target]
@@ -125,7 +127,7 @@ async def main() -> None:
 
     RESULT_FILE_NAME: pathlib.Path = MAIN_DIR / output
 
-    write_results_to_file(results, RESULT_FILE_NAME)
+    write_results_to_file(results, RESULT_FILE_NAME, format_json)
 
 
 if __name__ == '__main__':
