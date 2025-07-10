@@ -30,7 +30,7 @@ def format_bytes(num_bytes: int) -> str:
         return f"{num_bytes} B"
 
 
-def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name, format_json:bool = False) -> None:
+def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name, multi_target_work_around:bool = False) -> None:
     final_results = {
         "error": "Empty"
     }
@@ -53,7 +53,7 @@ def write_results_to_file(results: ASYNCIO_GATHER_TYPE, result_file_name, format
                 "stream_reader": format_bytes(result.get("stream_reader")),
                 "body_length": format_bytes(result.get("body_length")),
             }
-        if format_json:
+        if multi_target_work_around:
             final_results = {
                 url: {k: v for k, v in base_entry.items()}
             }
@@ -98,7 +98,7 @@ def cli() -> argparse.Namespace:
     parser.add_argument('--verbose', action='store_true', default=DEFAULT_DEBUGGING,
                         required=False, help='Verbose debug messages')
     parser.add_argument('--output', type=str, required=False, help='Output file name')
-    parser.add_argument('--format_json', action='store_true', required=False, help='result format json')
+    parser.add_argument('--multi-target-work-around', action='store_true', required=False, help='result format json')
 
     return parser.parse_args()
 
@@ -112,7 +112,7 @@ async def main() -> None:
 
     output: str = args.output
     target: str = args.target
-    format_json: bool = args.format_json
+    multi_target_work_around: bool = args.multi_target_work_around
 
     if target:
         urls: list[str] = [target]
@@ -127,7 +127,7 @@ async def main() -> None:
 
     RESULT_FILE_NAME: pathlib.Path = MAIN_DIR / output
 
-    write_results_to_file(results, RESULT_FILE_NAME, format_json)
+    write_results_to_file(results, RESULT_FILE_NAME, multi_target_work_around)
 
 
 if __name__ == '__main__':
